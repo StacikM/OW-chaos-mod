@@ -118,6 +118,15 @@ namespace ChaosMod
                 case Events.FlipScreen:
                     StartCoroutine(FlipScreen());
                     break;
+
+                case Events.DeduceHealthBy50:
+                    ItsComing("50 Damage");
+                    var body = Locator.GetPlayerBody();
+                    if (body == null) break; // your lucky this time
+
+                    var resources = body.GetComponent<PlayerResources>();
+
+                    resources.ApplyInstantDamage(50, InstantDamageType.Electrical); break; // emotional damage
             }
         }
 
@@ -289,6 +298,7 @@ namespace ChaosMod
         RemoveSpacesuit,
         BlowUpShip,
         FlipScreen,
+        DeduceHealthBy50,
     }
 
     [HarmonyPatch(typeof(DeathManager), nameof(DeathManager.KillPlayer))]
