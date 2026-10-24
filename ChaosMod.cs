@@ -97,6 +97,10 @@ namespace ChaosMod
                     if (!isFakeCrashAllowed) { /* reroll */ DecideWhichEvent(); break; }
                     StartCoroutine(FakeCrash());
                     break;
+
+                case Events.BigGuy:
+                    StartCoroutine(BigGuy());
+                    break;
             }
         }
 
@@ -193,6 +197,15 @@ namespace ChaosMod
             }
         }
 
+        IEnumerator BigGuy()
+        {
+            ItsComing("Big Guy (20s)");
+            OWRigidbody body = Locator.GetPlayerBody();
+            body.SetLocalScale(body.GetLocalScale() * 2f);
+            yield return new WaitForSeconds(20);
+            body.SetLocalScale(body.GetLocalScale() * 0.5f); // this will break if the player dies inbetween but well uh... chaos mod is the name of the mod so its ok
+        }
+
         public void Start()
         {
             // Starting here, you'll have access to OWML's mod helper.
@@ -235,7 +248,7 @@ namespace ChaosMod
         LowGravity,
         FastForwardThirtySec,
         FakeCrash,
-
+        BigGuy,
     }
 
     [HarmonyPatch(typeof(DeathManager), nameof(DeathManager.KillPlayer))]
