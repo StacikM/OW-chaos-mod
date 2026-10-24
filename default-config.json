@@ -9,6 +9,7 @@
       "max": 120,
       "title": "Seconds between effects"
     },
-    "Fake Crash": true
+    "Fake Crash": true,
+    "Remove Spacesuit": true
   }
 }

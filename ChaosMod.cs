@@ -1,7 +1,6 @@
 ﻿using HarmonyLib;
 using OWML.Common;
 using OWML.ModHelper;
-using Steamworks;
 using System;
 using System.Collections;
 using System.Diagnostics;
@@ -20,6 +19,7 @@ namespace ChaosMod
         public float secrettimer = 30f;
         private bool fastForwarding;
         private bool lowGravity;
+        private bool isRemoveSpacesuitAllowed = true;
         private readonly System.Random casino = new System.Random();
         private Events lastEvent = (Events)(-1);
         private bool isFakeCrashAllowed = true;
@@ -36,6 +36,7 @@ namespace ChaosMod
             effectInterval = config.GetSettingsValue<float>("Effect Interval");
             secrettimer = effectInterval;
             isFakeCrashAllowed = config.GetSettingsValue<bool>("Fake Crash");
+            isRemoveSpacesuitAllowed = config.GetSettingsValue<bool>("Remove Spacesuit");
         }
 
         public void Update()
@@ -100,6 +101,22 @@ namespace ChaosMod
 
                 case Events.BigGuy:
                     StartCoroutine(BigGuy());
+                    break;
+
+                case Events.RemoveSpacesuit:
+                    ItsComing("Remove Spacesuit");
+
+                    if (Locator.GetPlayerSuit() == null) return;
+                    var suit = Locator.GetPlayerSuit();
+                    if (suit.IsWearingSuit()) suit.RemoveSuit(true);
+                    break;
+
+                case Events.BlowUpShip:
+                    BlowUpShip();
+                    break;
+
+                case Events.FlipScreen:
+                    StartCoroutine(FlipScreen());
                     break;
             }
         }
@@ -184,7 +201,7 @@ namespace ChaosMod
             lowGravity = false;
             UI.Remove("currentEvent");
         }
-
+           
         private void ScaleGravity(GravityVolume[] volumes, float multiplier)
         {
             foreach (GravityVolume volume in volumes)
@@ -204,6 +221,26 @@ namespace ChaosMod
             body.SetLocalScale(body.GetLocalScale() * 2f);
             yield return new WaitForSeconds(20);
             body.SetLocalScale(body.GetLocalScale() * 0.5f); // this will break if the player dies inbetween but well uh... chaos mod is the name of the mod so its ok
+        }
+        public void BlowUpShip()
+        {
+            ItsComing("Blow Up Ship");
+
+            var shipBody = Locator.GetShipBody();
+            if (shipBody == null) return;
+
+            var damage = shipBody.GetComponent<ShipDamageController>();
+            if (damage == null || damage.IsDestroyed()) return;
+
+            damage.Explode();
+        }
+        IEnumerator FlipScreen()
+        {
+            ItsComing("Flip Screen (7 seconds)");
+            Camera cam = Locator.GetPlayerCamera().mainCamera;
+            cam.projectionMatrix = cam.projectionMatrix * Matrix4x4.Scale(new Vector3(1f, -1f, 1f));
+            yield return new WaitForSeconds(7);
+            cam.ResetProjectionMatrix();
         }
 
         public void Start()
@@ -249,6 +286,9 @@ namespace ChaosMod
         FastForwardThirtySec,
         FakeCrash,
         BigGuy,
+        RemoveSpacesuit,
+        BlowUpShip,
+        FlipScreen,
     }
 
     [HarmonyPatch(typeof(DeathManager), nameof(DeathManager.KillPlayer))]
@@ -256,7 +296,7 @@ namespace ChaosMod
     {
         public static void Prefix()
         {
-            if (!TimeLoop.IsTimeLoopEnabled())
+            if (!TimeLoop.IsTimeLoopEnabled() && LoadManager.GetCurrentScene() != OWScene.EyeOfTheUniverse) // i think its so cool that in the ending of outer wilds when the universe goes kaboom on you it actually kills the player
             {
                 ChaosMod.Instance.OnDiedBeforeLoop();
             }
