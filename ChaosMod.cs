@@ -162,7 +162,7 @@ namespace ChaosMod
 
                     var resources = body.GetComponent<PlayerResources>();
 
-                    resources.ApplyInstantDamage(50, InstantDamageType.Electrical); break; // emotional damage
+                    resources.ApplyInstantDamage(Locator.GetPlayerSuit().IsWearingSuit() ? 50 : 25, InstantDamageType.Electrical); break; // emotional damage
                 case Events.NoSunExplosionMusic:
                     silentExplodeCounter++;
                     DecideWhichEvent();
@@ -182,6 +182,21 @@ namespace ChaosMod
                     break;
 
                 case Events.PlayEndTimes: PlayEndTimes(); break;
+
+                case Events.PlayAnglerFishSFX:
+                    Locator.GetPlayerAudioController().PlayOneShotInternal(AudioType.DBAnglerfishBite);
+                    break;
+
+                case Events.PlayAnglerFishSFX2:
+                    Locator.GetPlayerAudioController().PlayOneShotInternal(AudioType.DBAnglerfishDetectDisturbance);
+                    break;
+
+                case Events.Jumpscare:
+                    UI.Video("jumpscare", "assets/jumpscare1.mp4");
+                    break;
+                case Events.FoxyJumpscare:
+                    UI.Animation("foxy", "assets/foxy", 400f, 300f, Anchor.Center, 0f, 0f, 20f, false);
+                    break;
             }
         }
 
@@ -486,7 +501,11 @@ namespace ChaosMod
         BreakARandomShipPart,
         CrashTheMoon,
         DvdScreensaver,
-        PlayEndTimes
+        PlayEndTimes,
+        PlayAnglerFishSFX,
+        PlayAnglerFishSFX2,
+        Jumpscare,
+        FoxyJumpscare,
     }
 
     [HarmonyPatch(typeof(GlobalMusicController), "UpdateEndTimesMusic")]

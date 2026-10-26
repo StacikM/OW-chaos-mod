@@ -23,6 +23,8 @@ Inspired by GTA 5 mod Chaos Mod
 - Break A Random Ship Part - Idea by Hamstry (again)
 - Crash The Moon - Idea by ystoce
 - Play End Times
+- Play Anglerfish bite sfx
+- Play Anglerfish detect sfx
 
 ## FAQ
 ### How do I disable a event thats not in settings

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Video;
 
 namespace ChaosMod
 {
@@ -287,6 +288,113 @@ namespace ChaosMod
         }
     }
 
+    public class UIVideo : UIElement
+    {
+        public string Id = "";
+        public float Volume = 1f;
+        public Action OnFinished;
+
+        private GameObject holder;
+        private VideoPlayer player;
+
+        public void Play(string path)
+        {
+            holder = new GameObject("ChaosMod.Video");
+            UnityEngine.Object.DontDestroyOnLoad(holder);
+
+            AudioSource audio = holder.AddComponent<AudioSource>();
+            audio.spatialBlend = 0f;
+            audio.volume = Volume;
+            audio.ignoreListenerPause = true;
+
+            player = holder.AddComponent<VideoPlayer>();
+            player.url = path;
+            player.playOnAwake = false;
+            player.isLooping = false;
+            player.renderMode = VideoRenderMode.APIOnly;
+            player.audioOutputMode = VideoAudioOutputMode.AudioSource;
+            player.SetTargetAudioSource(0, audio);
+            player.prepareCompleted += source => source.Play();
+            player.loopPointReached += source => Finish();
+            player.errorReceived += (source, message) =>
+            {
+                ChaosMod.Instance.ModHelper.Console.WriteLine("Video error: " + message);
+                Finish();
+            };
+            player.Prepare();
+        }
+
+        public void Finish()
+        {
+            if (holder != null) UnityEngine.Object.Destroy(holder);
+            holder = null;
+            player = null;
+
+            UI.Remove(Id);
+            if (OnFinished != null) OnFinished();
+        }
+
+        public override void Draw(Rect area)
+        {
+            if (player == null || !player.isPlaying || player.texture == null) return;
+
+            Rect screen = new Rect(0f, 0f, Screen.width, Screen.height);
+            UI.DrawRect(screen, Color.black);
+            GUI.DrawTexture(screen, player.texture, ScaleMode.ScaleToFit);
+        }
+    }
+
+    public class UIAnimation : UIElement
+    {
+        public string Id = "";
+        public float Fps = 20f;
+        public bool Loop;
+        public Action OnFinished;
+
+        private Texture2D[] frames = new Texture2D[0];
+        private float startedAt;
+
+        public UIAnimation()
+        {
+            Anchor = Anchor.Center;
+            Size = new Vector2(400f, 300f);
+        }
+
+        public void Load(string folder)
+        {
+            string[] files = System.IO.Directory.GetFiles(System.IO.Path.Combine(ChaosMod.Instance.ModHelper.Manifest.ModFolderPath, folder), "*.png");
+            Array.Sort(files, StringComparer.Ordinal);
+
+            frames = new Texture2D[files.Length];
+            for (int i = 0; i < files.Length; i++)
+            {
+                frames[i] = ChaosMod.Instance.ModHelper.Assets.GetTexture(folder + "/" + System.IO.Path.GetFileName(files[i]));
+            }
+
+            startedAt = Time.unscaledTime;
+        }
+
+        public void Finish()
+        {
+            UI.Remove(Id);
+            if (OnFinished != null) OnFinished();
+        }
+
+        public override void Draw(Rect area)
+        {
+            if (frames.Length == 0) return;
+
+            int index = (int)((Time.unscaledTime - startedAt) * Fps);
+            if (!Loop && index >= frames.Length)
+            {
+                Finish();
+                return;
+            }
+
+            GUI.DrawTexture(area, frames[index % frames.Length], ScaleMode.ScaleToFit, true);
+        }
+    }
+
     public static class UI
     {
         private class Toast
@@ -392,6 +500,39 @@ namespace ChaosMod
             Add(id, popup);
             popup.Open();
             return popup;
+        }
+
+        public static UIAnimation Animation(string id, string folder, float width, float height, Anchor anchor = Anchor.Center, float x = 0f, float y = 0f, float fps = 20f, bool loop = false, Action onFinished = null)
+        {
+            UIAnimation existing = Get<UIAnimation>(id);
+            if (existing != null) existing.Finish();
+
+            UIAnimation animation = new UIAnimation();
+            animation.Id = id;
+            animation.Size = new Vector2(width, height);
+            animation.Anchor = anchor;
+            animation.Offset = new Vector2(x, y);
+            animation.Fps = fps;
+            animation.Loop = loop;
+            animation.OnFinished = onFinished;
+            animation.Load(folder);
+
+            return Add(id, animation);
+        }
+
+        public static UIVideo Video(string id, string file, float volume = 1f, Action onFinished = null)
+        {
+            UIVideo existing = Get<UIVideo>(id);
+            if (existing != null) existing.Finish();
+
+            UIVideo video = new UIVideo();
+            video.Id = id;
+            video.Volume = volume;
+            video.OnFinished = onFinished;
+
+            Add(id, video);
+            video.Play(System.IO.Path.Combine(ChaosMod.Instance.ModHelper.Manifest.ModFolderPath, file));
+            return video;
         }
 
         public static T Get<T>(string id) where T : UIElement
