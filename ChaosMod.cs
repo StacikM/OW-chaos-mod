@@ -28,6 +28,7 @@ namespace ChaosMod
         private readonly System.Random casino = new System.Random();
         private Events lastEvent = (Events)(-1);
         private bool isFakeCrashAllowed = true;
+        private bool isBlowupyes = true;
 
         public int silentExplodeCounter = 0;
 
@@ -46,6 +47,7 @@ namespace ChaosMod
             effectInterval = config.GetSettingsValue<float>("Effect Interval");
             secrettimer = effectInterval;
             isFakeCrashAllowed = config.GetSettingsValue<bool>("Fake Crash");
+            isBlowupyes = config.GetSettingsValue<bool>("Blow Up Ship");
             isRemoveSpacesuitAllowed = config.GetSettingsValue<bool>("Remove Spacesuit");
         }
 
@@ -196,6 +198,13 @@ namespace ChaosMod
                     break;
                 case Events.FoxyJumpscare:
                     UI.Animation("foxy", "assets/foxy", 400f, 300f, Anchor.Center, 0f, 0f, 20f, false);
+                    break;
+
+                case Events.AccelerateInDarkBramble:
+                    ItsComing("Acceleration for 0.2s");
+                    bool insideBramble = PlayerState.InBrambleDimension();
+                    if (!insideBramble) { DecideWhichEvent(); break; } // aw
+                    StartCoroutine(Accelerate(2f));
                     break;
             }
         }
@@ -369,7 +378,22 @@ namespace ChaosMod
             lowGravity = false;
             UI.Remove("currentEvent");
         }
-           
+        private IEnumerator Accelerate(float howmuch)
+        {
+            OWRigidbody ship = Locator.GetShipBody();
+            if (ship == null) yield break;
+
+            ThrusterModel model = ship.GetComponentInChildren<ThrusterModel>();
+            float elapsed = 0f;
+
+            while (elapsed < howmuch && ship != null)
+            {
+                model.AddTranslationalInput(Vector3.forward);
+                elapsed += Time.fixedDeltaTime;
+                yield return new WaitForFixedUpdate();
+            }
+        }
+
         private void ScaleGravity(GravityVolume[] volumes, float multiplier)
         {
             foreach (GravityVolume volume in volumes)
@@ -393,6 +417,8 @@ namespace ChaosMod
         public void BlowUpShip()
         {
             ItsComing("Blow Up Ship");
+
+            if (!isBlowupyes) { DecideWhichEvent(); return; }
 
             var shipBody = Locator.GetShipBody();
             if (shipBody == null) return;
@@ -506,6 +532,7 @@ namespace ChaosMod
         PlayAnglerFishSFX2,
         Jumpscare,
         FoxyJumpscare,
+        AccelerateInDarkBramble,
     }
 
     [HarmonyPatch(typeof(GlobalMusicController), "UpdateEndTimesMusic")]

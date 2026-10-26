@@ -25,6 +25,9 @@ Inspired by GTA 5 mod Chaos Mod
 - Play End Times
 - Play Anglerfish bite sfx
 - Play Anglerfish detect sfx
+- Job app jumpscare
+- Foxy Jumpscare - Idea by wannacrylel
+- Acceleration for 0.2s (Dark Bramble only) - Idea by Hamstry
 
 ## FAQ
 ### How do I disable a event thats not in settings
