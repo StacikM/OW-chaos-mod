@@ -39,7 +39,7 @@ You cant
 ### Why is there not all events in settings
 I only put events that made me officially rage while testing
 ### Is this gonna mess with my computer?
-No, if there is an effect outside of outer wilds it is purely cosmetical using tricky stuff
+Partially, the mod can resize your game, show alerts and move the game window around. It will never touch anything outside of Outer Wilds
 ### Why are some effects not announced?? Fix your mod!!!!!
 Troll effects aren't announced or else they wouldn't be trolls
 
