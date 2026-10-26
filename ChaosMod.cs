@@ -31,6 +31,7 @@ namespace ChaosMod
         private bool isBlowupyes = true;
 
         public int silentExplodeCounter = 0;
+        public int reverseOrbitsCounter = 0;
 
         private Events? forcedEvent;
         private int debugIndex;
@@ -206,6 +207,19 @@ namespace ChaosMod
                     if (!insideBramble) { DecideWhichEvent(); break; } // aw
                     StartCoroutine(Accelerate(2f));
                     break;
+
+                case Events.ReverseOrbits:
+                    reverseOrbitsCounter++;
+                    if (reverseOrbitsCounter == 2)
+                    {
+                        ItsComing("Reverse orbits");
+                        ReverseOrbits();
+                        break;
+                    } else
+                    {
+                        DecideWhichEvent(); // im so dumb i could have just did a != instead of all of this
+                        break;
+                    }
             }
         }
 
@@ -470,6 +484,40 @@ namespace ChaosMod
             source.FadeInToLibraryVolume(2f);
             body.Field("_playingEndTimes").SetValue(true);
         }
+        public void ReverseOrbits()
+        {
+            OWRigidbody sun = Locator.GetAstroObject(AstroObject.Name.Sun).GetOWRigidbody();
+            List<AstroObject> planets = FindObjectsOfType<AstroObject>().Where(body => body.GetAstroObjectType() == AstroObject.Type.Planet && body.GetOWRigidbody() != null).ToList();
+            List<AstroObject> moons = FindObjectsOfType<AstroObject>().Where(body => body.GetAstroObjectType() == AstroObject.Type.Moon && body.GetOWRigidbody() != null).ToList();
+
+            Dictionary<OWRigidbody, Vector3> change = new Dictionary<OWRigidbody, Vector3>();
+
+            foreach (AstroObject planet in planets)
+            {
+                OWRigidbody body = planet.GetOWRigidbody();
+                Vector3 relative = body.GetVelocity() - sun.GetVelocity();
+                Vector3 reversed = sun.GetVelocity() - relative;
+                change[body] = reversed - body.GetVelocity();
+                body.SetVelocity(reversed);
+                body.SetAngularVelocity(-body.GetAngularVelocity());
+            }
+
+            foreach (AstroObject moon in moons)
+            {
+                OWRigidbody body = moon.GetOWRigidbody();
+                OWRigidbody parent = body.GetOrigParentBody();
+                Vector3 shift = parent != null && change.ContainsKey(parent) ? change[parent] : Vector3.zero;
+                body.SetVelocity(body.GetVelocity() + shift);
+            }
+
+            foreach (OWRigidbody rider in new OWRigidbody[] { Locator.GetPlayerBody(), Locator.GetShipBody() })
+            {
+                if (rider == null) continue;
+
+                OWRigidbody nearest = change.Keys.OrderBy(body => (body.GetPosition() - rider.GetPosition()).sqrMagnitude).First();
+                rider.SetVelocity(rider.GetVelocity() + change[nearest]);
+            }
+        }
 
         public void Start()
         {
@@ -533,6 +581,7 @@ namespace ChaosMod
         Jumpscare,
         FoxyJumpscare,
         AccelerateInDarkBramble,
+        ReverseOrbits
     }
 
     [HarmonyPatch(typeof(GlobalMusicController), "UpdateEndTimesMusic")]

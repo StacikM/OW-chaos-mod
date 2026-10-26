@@ -28,6 +28,7 @@ Inspired by GTA 5 mod Chaos Mod
 - Job app jumpscare
 - Foxy Jumpscare - Idea by wannacrylel
 - Acceleration for 0.2s (Dark Bramble only) - Idea by Hamstry
+- Reverse Orbits - Idea by miocid74020
 
 ## FAQ
 ### How do I disable a event thats not in settings
