@@ -32,6 +32,7 @@ namespace ChaosMod
 
         public int silentExplodeCounter = 0;
         public int reverseOrbitsCounter = 0;
+        public int reverseSandCounter = 0;
 
         private Events? forcedEvent;
         private int debugIndex;
@@ -210,7 +211,7 @@ namespace ChaosMod
 
                 case Events.ReverseOrbits:
                     reverseOrbitsCounter++;
-                    if (reverseOrbitsCounter == 2)
+                    if (reverseOrbitsCounter == 3)
                     {
                         ItsComing("Reverse orbits");
                         ReverseOrbits();
@@ -220,6 +221,22 @@ namespace ChaosMod
                         DecideWhichEvent(); // im so dumb i could have just did a != instead of all of this
                         break;
                     }
+
+                case Events.Blink:
+                    ItsComing("Blink");
+                    StartCoroutine(Blink());
+                    break;
+
+                case Events.DecreaseLoopByFiveMinutes:
+                    ItsComing("Decrease loop by 5m");
+                    TimeLoop.SetSecondsRemaining(TimeLoop.GetSecondsRemaining() - 300f);
+                    break;
+
+                case Events.ReverseSand:
+                    reverseSandCounter++;
+                    if (reverseSandCounter != 2) { DecideWhichEvent(); break; }
+                    ReverseSandFlow();
+                    break;
             }
         }
 
@@ -518,6 +535,21 @@ namespace ChaosMod
                 rider.SetVelocity(rider.GetVelocity() + change[nearest]);
             }
         }
+        private IEnumerator Blink()
+        {
+            PlayerCameraEffectController eyes = Locator.GetPlayerCamera().GetComponent<PlayerCameraEffectController>();
+            if (eyes == null) yield break;
+
+            eyes.CloseEyes(0.15f);
+            yield return new WaitForSeconds(0.25f);
+            eyes.OpenEyes(0.3f, true);
+        }
+
+        public void ReverseSandFlow()
+        {
+            ItsComing("Reversed Sand");
+            ReverseSandPatch.Reversed = true;
+        }
 
         public void Start()
         {
@@ -542,6 +574,7 @@ namespace ChaosMod
         public void OnCompleteSceneLoad(OWScene previousScene, OWScene newScene)
         {
             theBarButGlobalHaha.Visible = newScene == OWScene.SolarSystem || newScene == OWScene.EyeOfTheUniverse;
+            ReverseSandPatch.Reversed = false;
 
             UI.Remove("nice");
             if (newScene == OWScene.Credits_Final)
@@ -581,7 +614,28 @@ namespace ChaosMod
         Jumpscare,
         FoxyJumpscare,
         AccelerateInDarkBramble,
-        ReverseOrbits
+        ReverseOrbits,
+        Blink,
+        DecreaseLoopByFiveMinutes,
+        ReverseSand,
+    }
+
+    [HarmonyPatch(typeof(SandLevelController), "FixedUpdate")]
+    public static class ReverseSandPatch
+    {
+        public static bool Reversed;
+
+        private static readonly FieldInfo scaleCurve = AccessTools.Field(typeof(SandLevelController), "_scaleCurve");
+
+        public static void Postfix(SandLevelController __instance)
+        {
+            if (!Reversed || !TimeLoop.IsTimeLoopEnabled()) return;
+
+            AnimationCurve curve = (AnimationCurve)scaleCurve.GetValue(__instance);
+            float loopMinutes = TimeLoop.GetLoopDuration() / 60f;
+            float size = curve.Evaluate(Mathf.Max(0f, loopMinutes - TimeLoop.GetMinutesElapsed())); // yes
+            __instance.transform.localScale = new Vector3(size, size, size);
+        }
     }
 
     [HarmonyPatch(typeof(GlobalMusicController), "UpdateEndTimesMusic")]

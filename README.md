@@ -20,8 +20,9 @@ Inspired by GTA 5 mod Chaos Mod
 - Flip Screen (7s)
 - Deduce Health By 50
 - No Sun Explosion music (has to be triggered 3 times in a loop to be activated) - Idea by Hamstry
-- Break A Random Ship Part - Idea by Hamstry (again)
+- Break A Random Ship Part - Idea by Hamstry
 - Crash The Moon - Idea by ystoce
+- DVD Screensaver
 - Play End Times
 - Play Anglerfish bite sfx
 - Play Anglerfish detect sfx
@@ -29,6 +30,8 @@ Inspired by GTA 5 mod Chaos Mod
 - Foxy Jumpscare - Idea by wannacrylel
 - Acceleration for 0.2s (Dark Bramble only) - Idea by Hamstry
 - Reverse Orbits - Idea by miocid74020
+- Blink - Idea by Hamstry
+- Decrease Loop Time by 5 minutes - Idea by Hamstry
 
 ## FAQ
 ### How do I disable a event thats not in settings
@@ -39,3 +42,10 @@ I only put events that made me officially rage while testing
 No, if there is an effect outside of outer wilds it is purely cosmetical using tricky stuff
 ### Why are some effects not announced?? Fix your mod!!!!!
 Troll effects aren't announced or else they wouldn't be trolls
+
+## Credits
+[Stacik](https://github.com/StacikM) - Creator and owner of the mod
+
+[Hamstry](https://github.com/Hamstryk) - Leader of Ideas (mobius hire him pls)
+
+ystoce, wannacrylel, miocid74020 for suggesting ideas in the Outer Wilds Modding Discord
