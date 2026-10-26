@@ -3,11 +3,15 @@ using OWML.Common;
 using OWML.ModHelper;
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.InputSystem;
 
 namespace ChaosMod
 {
@@ -19,10 +23,16 @@ namespace ChaosMod
         public float secrettimer = 30f;
         private bool fastForwarding;
         private bool lowGravity;
+        private bool dvdActive;
         private bool isRemoveSpacesuitAllowed = true;
         private readonly System.Random casino = new System.Random();
         private Events lastEvent = (Events)(-1);
         private bool isFakeCrashAllowed = true;
+
+        public int silentExplodeCounter = 0;
+
+        private Events? forcedEvent;
+        private int debugIndex;
 
         public void Awake()
         {
@@ -42,6 +52,22 @@ namespace ChaosMod
         public void Update()
         {
             if (LoadManager.GetCurrentScene() != OWScene.SolarSystem && LoadManager.GetCurrentScene() != OWScene.EyeOfTheUniverse) { return; }
+
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null)
+            {
+                if (keyboard[Key.Home].wasPressedThisFrame)
+                {
+                    debugIndex = (debugIndex + 1) % Enum.GetValues(typeof(Events)).Length;
+                    UI.Notify("Debug: next event is " + (Events)debugIndex);
+                }
+
+                if (keyboard[Key.F10].wasPressedThisFrame)
+                {
+                    forcedEvent = (Events)debugIndex;
+                    DecideWhichEvent();
+                }
+            }
 
             secrettimer -= Time.unscaledDeltaTime;
 
@@ -68,10 +94,20 @@ namespace ChaosMod
         {
             int eventsTotal = System.Enum.GetValues(typeof(Events)).Length; // the c# compiler will never fail to get me shocked WHY DO I NEED TYPEOF
 
-            Events eventDecided = (Events)casino.Next(0, eventsTotal);
-            while (eventsTotal > 1 && eventDecided == lastEvent)
+            Events eventDecided;
+
+            if (forcedEvent.HasValue)
+            {
+                eventDecided = forcedEvent.Value;
+                forcedEvent = null;
+            }
+            else
             {
                 eventDecided = (Events)casino.Next(0, eventsTotal);
+                while (eventsTotal > 1 && eventDecided == lastEvent)
+                {
+                    eventDecided = (Events)casino.Next(0, eventsTotal);
+                }
             }
             lastEvent = eventDecided;
 
@@ -127,6 +163,25 @@ namespace ChaosMod
                     var resources = body.GetComponent<PlayerResources>();
 
                     resources.ApplyInstantDamage(50, InstantDamageType.Electrical); break; // emotional damage
+                case Events.NoSunExplosionMusic:
+                    silentExplodeCounter++;
+                    DecideWhichEvent();
+                    break;
+
+                case Events.BreakARandomShipPart:
+                    BreakRandomShipPart(); break;
+
+                case Events.CrashTheMoon: CrashMoon(); break;
+
+                case Events.DvdScreensaver:
+                    ItsComing("DVD Screensaver (15s)");
+                    if (!dvdActive)
+                    {
+                        StartCoroutine(DvdScreensaver(15f));
+                    }
+                    break;
+
+                case Events.PlayEndTimes: PlayEndTimes(); break;
             }
         }
 
@@ -193,6 +248,95 @@ namespace ChaosMod
             }
         }
 
+        private IEnumerator DvdScreensaver(float seconds)
+        {
+            dvdActive = true;
+            int width = Screen.width;
+            int height = Screen.height;
+            FullScreenMode mode = Screen.fullScreenMode;
+
+            Screen.SetResolution(640, 360, FullScreenMode.Windowed);
+
+            float screenWidth = Display.main.systemWidth;
+            float screenHeight = Display.main.systemHeight;
+
+            int homeX = 0;
+            int homeY = 0;
+            int windowWidth = 0;
+            int windowHeight = 0;
+            bool resized = false;
+            float waited = 0f;
+
+            while (waited < 3f)
+            {
+                waited += Time.unscaledDeltaTime;
+                yield return null;
+
+                if (WindowMover.TryGetRect(out homeX, out homeY, out windowWidth, out windowHeight) && windowWidth < screenWidth * 0.9f)
+                {
+                    resized = true;
+                    break;
+                }
+            }
+
+            if (!resized)
+            {
+                ModHelper.Console.WriteLine($"DVD: window never shrank ({windowWidth}x{windowHeight}, screen {screenWidth}x{screenHeight})");
+                Screen.SetResolution(width, height, mode);
+                dvdActive = false;
+                yield break;
+            }
+
+            yield return new WaitForSecondsRealtime(0.3f);
+            WindowMover.TryGetRect(out homeX, out homeY, out windowWidth, out windowHeight);
+            float x = homeX;
+            float y = homeY;
+            float speedX = 320f;
+            float speedY = 240f;
+            float elapsed = 0f;
+
+            while (elapsed < seconds)
+            {
+                float step = Time.unscaledDeltaTime;
+                elapsed += step;
+                int currentX;
+                int currentY;
+                WindowMover.TryGetRect(out currentX, out currentY, out windowWidth, out windowHeight);
+                x += speedX * step;
+                y += speedY * step;
+
+                bool hitX = false;
+                bool hitY = false;
+
+                if (x <= 0f || x + windowWidth >= screenWidth)
+                {
+                    x = Mathf.Clamp(x, 0f, Mathf.Max(0f, screenWidth - windowWidth));
+                    speedX = -speedX;
+                    hitX = true;
+                }
+
+                if (y <= 0f || y + windowHeight >= screenHeight)
+                {
+                    y = Mathf.Clamp(y, 0f, Mathf.Max(0f, screenHeight - windowHeight));
+                    speedY = -speedY;
+                    hitY = true;
+                }
+
+                if (hitX && hitY)
+                {
+                    UI.Notify("CORNER!", Color.yellow, 2f); // one in one million
+                }
+
+                WindowMover.TryMove(Mathf.RoundToInt(x), Mathf.RoundToInt(y));
+                yield return null;
+            }
+
+            WindowMover.TryMove(homeX, homeY);
+            Screen.SetResolution(width, height, mode);
+            dvdActive = false;
+            UI.Remove("currentEvent");
+        }
+
         private IEnumerator LowGravity(float multiplier, float seconds)
         {
             lowGravity = true;
@@ -251,11 +395,50 @@ namespace ChaosMod
             yield return new WaitForSeconds(7);
             cam.ResetProjectionMatrix();
         }
+        public void BreakRandomShipPart()
+        {
+            OWRigidbody ship = Locator.GetShipBody();
+            if (ship == null) return;
+
+            List<ShipComponent> working = ship.GetComponentsInChildren<ShipComponent>().Where(part => !part.isDamaged).ToList();
+            if (working.Count == 0) return; // crazy
+
+            ShipComponent chosen = working[casino.Next(working.Count)];
+            chosen.SetDamaged(true);
+            ItsComing("Broke ship part: " + chosen.componentName);
+        }
+        public void CrashMoon()
+        {
+            ItsComing("Moon is going into timber hearth");
+            OWRigidbody moon = Locator.GetAstroObject(AstroObject.Name.TimberMoon).GetOWRigidbody();
+            OWRigidbody planet = Locator.GetAstroObject(AstroObject.Name.TimberHearth).GetOWRigidbody();
+
+            Vector3 toward = (planet.GetPosition() - moon.GetPosition()).normalized;
+            moon.SetVelocity(planet.GetVelocity() + toward * 40f);
+        }
+        public void PlayEndTimes()
+        {
+            GlobalMusicController music = Locator.GetGlobalMusicController();
+            if (music == null) return;
+
+            Traverse body = Traverse.Create(music);
+            OWAudioSource source = body.Field("_endTimesSource").GetValue<OWAudioSource>();
+
+            Locator.GetAudioMixer().MixEndTimes(5f);
+            source.time = 0f;
+            source.FadeInToLibraryVolume(2f);
+            body.Field("_playingEndTimes").SetValue(true);
+        }
 
         public void Start()
         {
+            var os = SystemInfo.operatingSystemFamily;
             // Starting here, you'll have access to OWML's mod helper.
             ModHelper.Console.WriteLine($"My mod {nameof(ChaosMod)} is loaded!", MessageType.Success);
+            if (os != OperatingSystemFamily.Windows)
+            {
+                UI.Popup("nonWindowsWarning", "WARNING! DO NOT IGNORE THIS\nYou are not using Windows, which this mod heavily relies on. You may encounter issues or some events skipping", "I understand, continue", 5f);
+            }
             UIBar bar = UI.Bar("timer", 1f, Anchor.TopCenter, 0, 0);
             theBarButGlobalHaha = bar;
             bar.Visible = false;
@@ -299,12 +482,26 @@ namespace ChaosMod
         BlowUpShip,
         FlipScreen,
         DeduceHealthBy50,
+        NoSunExplosionMusic,
+        BreakARandomShipPart,
+        CrashTheMoon,
+        DvdScreensaver,
+        PlayEndTimes
+    }
+
+    [HarmonyPatch(typeof(GlobalMusicController), "UpdateEndTimesMusic")]
+    public static class EndTimesMusicPatch
+    {
+        public static bool Prefix()
+        {
+            return !(TimeLoop.IsTimeLoopEnabled() && ChaosMod.Instance.silentExplodeCounter >= 3);
+        }
     }
 
     [HarmonyPatch(typeof(DeathManager), nameof(DeathManager.KillPlayer))]
     public static class PlayerDeathPatch
     {
-        public static void Prefix()
+        public static void Prefix(DeathType deathType)
         {
             if (!TimeLoop.IsTimeLoopEnabled() && LoadManager.GetCurrentScene() != OWScene.EyeOfTheUniverse) // i think its so cool that in the ending of outer wilds when the universe goes kaboom on you it actually kills the player
             {
@@ -333,6 +530,42 @@ namespace ChaosMod
         [DllImport("user32.dll")]
         private static extern bool ClipCursor(IntPtr rect);
 
+        private delegate bool EnumWindowsCallback(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetClassName(IntPtr hWnd, StringBuilder text, int maxCount);
+
+        private static IntPtr FindGameWindow()
+        {
+            uint processId = (uint)Process.GetCurrentProcess().Id;
+            IntPtr found = IntPtr.Zero;
+
+            EnumWindows((hWnd, lParam) =>
+            {
+                uint owner;
+                GetWindowThreadProcessId(hWnd, out owner);
+                if (owner != processId || !IsWindowVisible(hWnd)) return true;
+
+                StringBuilder className = new StringBuilder(64);
+                GetClassName(hWnd, className, className.Capacity);
+                if (className.ToString() != "UnityWndClass") return true;
+
+                found = hWnd;
+                return false;
+            }, IntPtr.Zero);
+
+            return found != IntPtr.Zero ? found : Process.GetCurrentProcess().MainWindowHandle;
+        }
+
         public static void ReleaseCursor()
         {
             try
@@ -347,6 +580,30 @@ namespace ChaosMod
         private const uint SWP_NOSIZE = 0x0001;
         private const uint SWP_NOZORDER = 0x0004;
 
+        public static bool TryGetRect(out int x, out int y, out int width, out int height)
+        {
+            x = 0;
+            y = 0;
+            width = 0;
+            height = 0;
+
+            try
+            {
+                WindowRect rect;
+                if (!GetWindowRect(FindGameWindow(), out rect)) return false;
+
+                x = rect.Left;
+                y = rect.Top;
+                width = rect.Right - rect.Left;
+                height = rect.Bottom - rect.Top;
+                return true;
+            }
+            catch (DllNotFoundException)
+            {
+                return false;
+            }
+        }
+
         public static bool TryGetPosition(out int x, out int y)
         {
             x = 0;
@@ -355,7 +612,7 @@ namespace ChaosMod
             try
             {
                 WindowRect rect;
-                if (!GetWindowRect(Process.GetCurrentProcess().MainWindowHandle, out rect)) return false;
+                if (!GetWindowRect(FindGameWindow(), out rect)) return false;
 
                 x = rect.Left;
                 y = rect.Top;
@@ -371,7 +628,7 @@ namespace ChaosMod
         {
             try
             {
-                return SetWindowPos(Process.GetCurrentProcess().MainWindowHandle, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+                return SetWindowPos(FindGameWindow(), IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
             }
             catch (DllNotFoundException)
             {

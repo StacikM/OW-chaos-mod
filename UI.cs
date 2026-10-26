@@ -166,6 +166,127 @@ namespace ChaosMod
         }
     }
 
+    public class UIPopup : UIElement
+    {
+        public string Id = "";
+        public string Message = "";
+        public string ButtonText = "Continue";
+        public float LockSeconds = 5f;
+        public int MessageSize = 34;
+        public int ButtonSize = 24;
+        public Action OnClose;
+        public Color TextColor = new Color(0.98f, 0.52f, 0.18f, 1f);
+        public Color Background = new Color(0.05f, 0.05f, 0.05f, 0.98f);
+        public Color Border = new Color(0.99f, 0.89f, 0.78f, 1f);
+
+        private float openedAt;
+        private bool isOpen;
+        private bool cursorWasVisible;
+        private CursorLockMode cursorLock;
+        private bool pauseLocked;
+
+        public UIPopup()
+        {
+            Anchor = Anchor.Center;
+            Size = new Vector2(1100f, 620f);
+        }
+
+        public float Remaining
+        {
+            get { return Mathf.Max(0f, LockSeconds - (Time.unscaledTime - openedAt)); }
+        }
+
+        public void Open()
+        {
+            if (isOpen) return;
+
+            isOpen = true;
+            openedAt = Time.unscaledTime;
+            cursorWasVisible = Cursor.visible;
+            cursorLock = Cursor.lockState;
+
+            OWTime.Pause(OWTime.PauseType.Menu);
+            OWInput.ChangeInputMode(InputMode.Menu);
+
+            if (Locator.GetPauseCommandListener() != null)
+            {
+                Locator.GetPauseCommandListener().AddPauseCommandLock();
+                pauseLocked = true;
+            }
+        }
+
+        public void Close()
+        {
+            if (!isOpen) return;
+
+            isOpen = false;
+
+            if (pauseLocked && Locator.GetPauseCommandListener() != null)
+            {
+                Locator.GetPauseCommandListener().RemovePauseCommandLock();
+            }
+            pauseLocked = false;
+
+            OWTime.Unpause(OWTime.PauseType.Menu);
+            OWInput.RestorePreviousInputs();
+            Cursor.visible = cursorWasVisible;
+            Cursor.lockState = cursorLock;
+
+            UI.Remove(Id);
+            if (OnClose != null) OnClose();
+        }
+
+        public override void Draw(Rect area)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+
+            float scale = UI.Scale;
+            float border = 3f * scale;
+
+            UI.DrawRect(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0f, 0f, 0f, 0.7f));
+            UI.DrawRect(area, Background);
+            UI.DrawRect(new Rect(area.x, area.y, area.width, border), Border);
+            UI.DrawRect(new Rect(area.x, area.yMax - border, area.width, border), Border);
+            UI.DrawRect(new Rect(area.x, area.y, border, area.height), Border);
+            UI.DrawRect(new Rect(area.xMax - border, area.y, border, area.height), Border);
+
+            Rect messageRect = new Rect(area.x + 80f * scale, area.y + 90f * scale, area.width - 160f * scale, 260f * scale);
+            UI.DrawWrappedText(messageRect, Message, MessageSize, TextColor, TextAnchor.UpperCenter);
+
+            float dotSize = 3f * scale;
+            float dotGap = 9f * scale;
+            float lineY = area.y + area.height * 0.64f;
+            float lineWidth = area.width * 0.55f;
+            for (float dx = 0f; dx < lineWidth; dx += dotGap)
+            {
+                UI.DrawRect(new Rect(area.center.x - lineWidth / 2f + dx, lineY, dotSize, dotSize), new Color(0.45f, 0.45f, 0.45f, 1f));
+            }
+
+            Rect button = new Rect(area.center.x - 200f * scale, area.yMax - 130f * scale, 400f * scale, 50f * scale);
+            float remaining = Remaining;
+            bool locked = remaining > 0f;
+            bool hovering = !locked && button.Contains(UI.MousePosition);
+
+            Color buttonColor = locked ? new Color(TextColor.r, TextColor.g, TextColor.b, 0.35f) : TextColor;
+            UI.DrawRect(button, hovering ? new Color(TextColor.r, TextColor.g, TextColor.b, 0.25f) : Background);
+            UI.DrawRect(new Rect(button.x, button.y, button.width, border), buttonColor);
+            UI.DrawRect(new Rect(button.x, button.yMax - border, button.width, border), buttonColor);
+            UI.DrawRect(new Rect(button.x, button.y, border, button.height), buttonColor);
+            UI.DrawRect(new Rect(button.xMax - border, button.y, border, button.height), buttonColor);
+
+            string label = locked ? ButtonText + " (" + Mathf.CeilToInt(remaining) + ")" : ButtonText;
+            UI.DrawText(button, label, ButtonSize, buttonColor, TextAnchor.MiddleCenter, false, true);
+
+            Event e = Event.current;
+            if (hovering && e.type == EventType.MouseDown && e.button == 0)
+            {
+                e.Use();
+                Close();
+            }
+        }
+    }
+
     public static class UI
     {
         private class Toast
@@ -256,6 +377,23 @@ namespace ChaosMod
             return Add(id, panel);
         }
 
+        public static UIPopup Popup(string id, string message, string buttonText = "Continue", float lockSeconds = 5f, Action onClose = null)
+        {
+            UIPopup popup = new UIPopup();
+            popup.Id = id;
+            popup.Message = message;
+            popup.ButtonText = buttonText;
+            popup.LockSeconds = lockSeconds;
+            popup.OnClose = onClose;
+
+            UIPopup existing = Get<UIPopup>(id);
+            if (existing != null) existing.Close();
+
+            Add(id, popup);
+            popup.Open();
+            return popup;
+        }
+
         public static T Get<T>(string id) where T : UIElement
         {
             UIElement element;
@@ -321,6 +459,13 @@ namespace ChaosMod
 
             style.normal.textColor = color;
             GUI.Label(rect, text, style);
+        }
+
+        public static void DrawWrappedText(Rect rect, string text, int size, Color color, TextAnchor alignment)
+        {
+            style.wordWrap = true;
+            DrawText(rect, text, size, color, alignment, false, false);
+            style.wordWrap = false;
         }
 
         private static void EnsureHost()
