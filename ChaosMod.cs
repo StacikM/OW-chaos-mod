@@ -17,6 +17,7 @@ namespace ChaosMod
 {
     public class ChaosMod : ModBehaviour
     {
+        private IQSBAPI qsb;
         public UIBar theBarButGlobalHaha;
         public static ChaosMod Instance;
         private float effectInterval = 30f;
@@ -29,6 +30,7 @@ namespace ChaosMod
         private Events lastEvent = (Events)(-1);
         private bool isFakeCrashAllowed = true;
         private bool isBlowupyes = true;
+        public bool isQSBallowed = false;
 
         public int silentExplodeCounter = 0;
         public int reverseOrbitsCounter = 0;
@@ -51,6 +53,7 @@ namespace ChaosMod
             isFakeCrashAllowed = config.GetSettingsValue<bool>("Fake Crash");
             isBlowupyes = config.GetSettingsValue<bool>("Blow Up Ship");
             isRemoveSpacesuitAllowed = config.GetSettingsValue<bool>("Remove Spacesuit");
+            isQSBallowed = config.GetSettingsValue<bool>("Allow QSB");
         }
 
         public void Update()
@@ -236,6 +239,11 @@ namespace ChaosMod
                     reverseSandCounter++;
                     if (reverseSandCounter != 2) { DecideWhichEvent(); break; }
                     ReverseSandFlow();
+                    break;
+
+                case Events.ProxyPlanets:
+                    ItsComing("Proxy Planets (15s)");
+                    StartCoroutine(ProxyPlanets(15f));
                     break;
             }
         }
@@ -544,11 +552,55 @@ namespace ChaosMod
             yield return new WaitForSeconds(0.25f);
             eyes.OpenEyes(0.3f, true);
         }
-
         public void ReverseSandFlow()
         {
             ItsComing("Reversed Sand");
             ReverseSandPatch.Reversed = true;
+        }
+        private IEnumerator ProxyPlanets(float seconds) // oh god this is messy
+        {
+            ProxyBody[] proxies = FindObjectsOfType<ProxyBody>().Where(proxy => proxy.realObjectTransform != null).ToArray();
+            Dictionary<ProxyBody, List<Renderer>> hidden = new Dictionary<ProxyBody, List<Renderer>>();
+
+            foreach (ProxyBody proxy in proxies)
+            {
+                List<Renderer> renderers = proxy.realObjectTransform.GetComponentsInChildren<Renderer>().Where(renderer => renderer.enabled).ToList();
+                foreach (Renderer renderer in renderers) renderer.enabled = false;
+                hidden[proxy] = renderers;
+
+                proxy.enabled = false;
+                proxy.ToggleRendering(true);
+            }
+
+            float elapsed = 0f;
+            while (elapsed < seconds)
+            {
+                foreach (ProxyBody proxy in proxies)
+                {
+                    if (proxy == null || proxy.realObjectTransform == null) continue;
+
+                    proxy.transform.position = proxy.realObjectTransform.position;
+                    proxy.transform.rotation = proxy.realObjectTransform.rotation;
+                    proxy.transform.localScale = Vector3.one;
+                }
+
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            foreach (ProxyBody proxy in proxies)
+            {
+                if (proxy == null) continue;
+
+                proxy.ToggleRendering(false);
+                proxy.enabled = true;
+                foreach (Renderer renderer in hidden[proxy])
+                {
+                    if (renderer != null) renderer.enabled = true;
+                }
+
+                UI.Remove("currentEvent");
+            }
         }
 
         public void Start()
@@ -571,10 +623,42 @@ namespace ChaosMod
             LoadManager.OnCompleteSceneLoad += OnCompleteSceneLoad;
         }
 
+        private bool InMultiplayer()
+        {
+            if (qsb == null)
+            {
+                qsb = ModHelper.Interaction.TryGetModApi<IQSBAPI>("Raicuparta.QuantumSpaceBuddies");
+            }
+
+            return qsb != null && qsb.GetIsInMultiplayer();
+        }
+        public bool LeaveQsbSession()
+        {
+            IModBehaviour qsb = ModHelper.Interaction.TryGetMod("Raicuparta.QuantumSpaceBuddies");
+            if (qsb == null) return false;
+
+            Type manager = qsb.GetType().Assembly.GetType("QSB.QSBNetworkManager");
+            if (manager == null) return false;
+
+            PropertyInfo singleton = manager.GetProperty("singleton", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            object instance = singleton == null ? null : singleton.GetValue(null, null);
+            if (instance == null) return false;
+
+            manager.GetMethod("StopHost", BindingFlags.Public | BindingFlags.Instance).Invoke(instance, null);
+            LoadManager.LoadScene(OWScene.TitleScreen, LoadManager.FadeType.ToBlack, 2f, true);
+            return true;
+        }
+
         public void OnCompleteSceneLoad(OWScene previousScene, OWScene newScene)
         {
             theBarButGlobalHaha.Visible = newScene == OWScene.SolarSystem || newScene == OWScene.EyeOfTheUniverse;
             ReverseSandPatch.Reversed = false;
+
+            //if (InMultiplayer() && !isQSBallowed)
+            //{
+            //    LeaveQsbSession(); // fuck nah
+            //    UI.Popup("absolutelynot", "No, I will not let you play QSB with ChaosMod\nIf you agree to potentially endure effects such as: pain, despare, depression and crashes, you may turn the protection off in settings");
+            //}
 
             UI.Remove("nice");
             if (newScene == OWScene.Credits_Final)
@@ -618,6 +702,7 @@ namespace ChaosMod
         Blink,
         DecreaseLoopByFiveMinutes,
         ReverseSand,
+        ProxyPlanets,
     }
 
     [HarmonyPatch(typeof(SandLevelController), "FixedUpdate")]
@@ -824,5 +909,11 @@ namespace ChaosMod
                 return false;
             }
         }
+    }
+
+    public interface IQSBAPI
+    {
+        bool GetIsInMultiplayer();
+        bool GetIsHost();
     }
 }

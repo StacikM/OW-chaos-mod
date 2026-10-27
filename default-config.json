@@ -2,11 +2,10 @@
   "$schema": "https://raw.githubusercontent.com/ow-mods/owml/master/schemas/config_schema.json",
   "enabled": true,
   "settings": {
+    "Allow QSB": false,
     "Effect Interval": {
-      "type": "slider",
+      "type": "number",
       "value": 30,
-      "min": 5,
-      "max": 120,
       "title": "Seconds between effects"
     },
     "Fake Crash": true,
