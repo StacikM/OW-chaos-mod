@@ -12,6 +12,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem;
+using Newtonsoft.Json.Serialization;
 
 namespace ChaosMod
 {
@@ -31,6 +32,7 @@ namespace ChaosMod
         private bool isFakeCrashAllowed = true;
         private bool isBlowupyes = true;
         public bool isQSBallowed = false;
+        private bool showQsbWarning;
 
         public int silentExplodeCounter = 0;
         public int reverseOrbitsCounter = 0;
@@ -244,6 +246,29 @@ namespace ChaosMod
                 case Events.ProxyPlanets:
                     ItsComing("Proxy Planets (15s)");
                     StartCoroutine(ProxyPlanets(15f));
+                    break;
+
+                case Events.Turn180:
+                    ItsComing("Turn 180°");
+                    Turn180();
+                    break;
+
+                case Events.TwoTimesHealth:
+                    ItsComing("2x Max Health");
+                    PlayerResources resourcesaaaaaaaaaaa = Locator.GetPlayerBody().GetComponent<PlayerResources>(); // without the aaaaaaaaaaa it says alr defined so too bad
+                    Traverse.Create(resourcesaaaaaaaaaaa).Field("_currentHealth").SetValue(200f);
+                    break;
+
+                case Events.DeadBatteries:
+                    ItsComing("Dead Batteries (30s)");
+                    StartCoroutine(DeadBatteries(30f));
+                    break;
+
+                case Events.ControlsStuck:
+                    ShipCockpitController cockpit = Locator.GetShipBody()?.GetComponentInChildren<ShipCockpitController>();
+                    if (cockpit == null || !cockpit.IsPlayerAtFlightConsole()) { DecideWhichEvent(); break; } // aw
+                    ItsComing("Controls Jammed (6s)");
+                    cockpit.LockUpControls(6f);
                     break;
             }
         }
@@ -602,6 +627,25 @@ namespace ChaosMod
                 UI.Remove("currentEvent");
             }
         }
+        private IEnumerator DeadBatteries(float seconds)
+        {
+            DeadBatteriesPatch.Disabled = true;
+            Flashlight flashlight = Locator.GetFlashlight();
+            if (flashlight != null) flashlight.TurnOff();
+
+            yield return new WaitForSeconds(seconds);
+
+            DeadBatteriesPatch.Disabled = false;
+            UI.Remove("currentEvent");
+        }
+        private void Turn180()
+        {
+            OWRigidbody body = Locator.GetPlayerBody();
+            if (body == null) return;
+
+            Quaternion turned = body.transform.rotation * Quaternion.AngleAxis(180f, Vector3.up);
+            body.WarpToPositionRotation(body.GetPosition(), turned);
+        }
 
         public void Start()
         {
@@ -640,11 +684,15 @@ namespace ChaosMod
             Type manager = qsb.GetType().Assembly.GetType("QSB.QSBNetworkManager");
             if (manager == null) return false;
 
-            PropertyInfo singleton = manager.GetProperty("singleton", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
-            object instance = singleton == null ? null : singleton.GetValue(null, null);
+            object instance = null;
+            for (Type type = manager; type != null && instance == null; type = type.BaseType)
+            {
+                PropertyInfo singleton = type.GetProperty("singleton", BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+                if (singleton != null) instance = singleton.GetValue(null, null);
+            }
             if (instance == null) return false;
 
-            manager.GetMethod("StopHost", BindingFlags.Public | BindingFlags.Instance).Invoke(instance, null);
+            instance.GetType().GetMethod("StopHost", BindingFlags.Public | BindingFlags.Instance).Invoke(instance, null);
             LoadManager.LoadScene(OWScene.TitleScreen, LoadManager.FadeType.ToBlack, 2f, true);
             return true;
         }
@@ -654,11 +702,26 @@ namespace ChaosMod
             theBarButGlobalHaha.Visible = newScene == OWScene.SolarSystem || newScene == OWScene.EyeOfTheUniverse;
             ReverseSandPatch.Reversed = false;
 
-            //if (InMultiplayer() && !isQSBallowed)
-            //{
-            //    LeaveQsbSession(); // fuck nah
-            //    UI.Popup("absolutelynot", "No, I will not let you play QSB with ChaosMod\nIf you agree to potentially endure effects such as: pain, despare, depression and crashes, you may turn the protection off in settings");
-            //}
+            if (newScene == OWScene.TitleScreen && showQsbWarning)
+            {
+                showQsbWarning = false;
+                UI.Popup("absolutelynot", "No, I will not let you play QSB with ChaosMod\nIf you agree to potentially endure effects such as: pain, despare, depression and crashes, you may turn the protection off in settings");
+            }
+
+            if ((newScene == OWScene.SolarSystem || newScene == OWScene.EyeOfTheUniverse) && !isQSBallowed) // yandere simulator ahh code
+            {
+                try
+                {
+                    if (InMultiplayer() && LeaveQsbSession())
+                    {
+                        showQsbWarning = true;
+                    }
+                }
+                catch (Exception extremelybadsituation)
+                {
+                    ModHelper.Console.WriteLine("qsb failed: " + extremelybadsituation.Message, MessageType.Error);
+                }
+            }
 
             UI.Remove("nice");
             if (newScene == OWScene.Credits_Final)
@@ -668,6 +731,7 @@ namespace ChaosMod
             {
                 UI.Remove("nice");
                 UI.Remove("hehehe");
+                UI.Remove("currentEvent"); // if event takes you out it remains on screen for some reason
             }
         }
 
@@ -703,6 +767,10 @@ namespace ChaosMod
         DecreaseLoopByFiveMinutes,
         ReverseSand,
         ProxyPlanets,
+        Turn180,
+        TwoTimesHealth,
+        DeadBatteries,
+        ControlsStuck,
     }
 
     [HarmonyPatch(typeof(SandLevelController), "FixedUpdate")]
@@ -720,6 +788,16 @@ namespace ChaosMod
             float loopMinutes = TimeLoop.GetLoopDuration() / 60f;
             float size = curve.Evaluate(Mathf.Max(0f, loopMinutes - TimeLoop.GetMinutesElapsed())); // yes
             __instance.transform.localScale = new Vector3(size, size, size);
+        }
+    }
+    [HarmonyPatch(typeof(Flashlight), nameof(Flashlight.TurnOn))]
+    public static class DeadBatteriesPatch
+    {
+        public static bool Disabled;
+
+        public static bool Prefix()
+        {
+            return !Disabled;
         }
     }
 

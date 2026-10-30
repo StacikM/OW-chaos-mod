@@ -185,6 +185,7 @@ namespace ChaosMod
         private bool cursorWasVisible;
         private CursorLockMode cursorLock;
         private bool pauseLocked;
+        private OWScene openedInScene;
 
         public UIPopup()
         {
@@ -205,6 +206,7 @@ namespace ChaosMod
             openedAt = Time.unscaledTime;
             cursorWasVisible = Cursor.visible;
             cursorLock = Cursor.lockState;
+            openedInScene = LoadManager.GetCurrentScene();
 
             OWTime.Pause(OWTime.PauseType.Menu);
             OWInput.ChangeInputMode(InputMode.Menu);
@@ -228,10 +230,13 @@ namespace ChaosMod
             }
             pauseLocked = false;
 
-            OWTime.Unpause(OWTime.PauseType.Menu);
-            OWInput.RestorePreviousInputs();
-            Cursor.visible = cursorWasVisible;
-            Cursor.lockState = cursorLock;
+            if (LoadManager.GetCurrentScene() == openedInScene)
+            {
+                OWTime.Unpause(OWTime.PauseType.Menu);
+                OWInput.RestorePreviousInputs();
+                Cursor.visible = cursorWasVisible;
+                Cursor.lockState = cursorLock;
+            }
 
             UI.Remove(Id);
             if (OnClose != null) OnClose();
