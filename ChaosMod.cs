@@ -33,6 +33,7 @@ namespace ChaosMod
         private bool isBlowupyes = true;
         public bool isQSBallowed = false;
         private bool showQsbWarning;
+        public bool debug = false;
 
         public int silentExplodeCounter = 0;
         public int reverseOrbitsCounter = 0;
@@ -56,6 +57,7 @@ namespace ChaosMod
             isBlowupyes = config.GetSettingsValue<bool>("Blow Up Ship");
             isRemoveSpacesuitAllowed = config.GetSettingsValue<bool>("Remove Spacesuit");
             isQSBallowed = config.GetSettingsValue<bool>("Allow QSB");
+            debug = config.GetSettingsValue<bool>("Debug");
         }
 
         public void Update()
@@ -63,7 +65,7 @@ namespace ChaosMod
             if (LoadManager.GetCurrentScene() != OWScene.SolarSystem && LoadManager.GetCurrentScene() != OWScene.EyeOfTheUniverse) { return; }
 
             Keyboard keyboard = Keyboard.current;
-            if (keyboard != null)
+            if (keyboard != null && debug == true)
             {
                 if (keyboard[Key.Home].wasPressedThisFrame)
                 {
@@ -149,6 +151,7 @@ namespace ChaosMod
                     break;
 
                 case Events.RemoveSpacesuit:
+                    if (Locator.GetEyeStateManager().IsInsideTheEye()) { DecideWhichEvent(); break; } // Before the observatory is ok, since they will die a horrible death and come back to the vessel, but after the observatory you can't die and you can't complete the game without spacesuit
                     ItsComing("Remove Spacesuit");
 
                     if (Locator.GetPlayerSuit() == null) return;
@@ -233,6 +236,7 @@ namespace ChaosMod
                     break;
 
                 case Events.DecreaseLoopByFiveMinutes:
+                    if (LoadManager.GetCurrentScene() == OWScene.EyeOfTheUniverse) { DecideWhichEvent(); break; }
                     ItsComing("Decrease loop by 5m");
                     TimeLoop.SetSecondsRemaining(TimeLoop.GetSecondsRemaining() - 300f);
                     break;
@@ -244,6 +248,7 @@ namespace ChaosMod
                     break;
 
                 case Events.ProxyPlanets:
+                    if (LoadManager.GetCurrentScene() == OWScene.EyeOfTheUniverse) { DecideWhichEvent(); break; } // will break the eye, i think, better safe than sorry
                     ItsComing("Proxy Planets (15s)");
                     StartCoroutine(ProxyPlanets(15f));
                     break;
@@ -259,7 +264,7 @@ namespace ChaosMod
                     Traverse.Create(resourcesaaaaaaaaaaa).Field("_currentHealth").SetValue(200f);
                     break;
 
-                case Events.DeadBatteries:
+                case Events.DeadBatteries: // good luck at the eye of the universe
                     ItsComing("Dead Batteries (30s)");
                     StartCoroutine(DeadBatteries(30f));
                     break;
@@ -269,6 +274,15 @@ namespace ChaosMod
                     if (cockpit == null || !cockpit.IsPlayerAtFlightConsole()) { DecideWhichEvent(); break; } // aw
                     ItsComing("Controls Jammed (6s)");
                     cockpit.LockUpControls(6f);
+                    break;
+
+                case Events.CameraDoABarrelRoll:
+                    StartCoroutine(CameraDoABarrelRoll(1.2f));
+                    break;
+
+                case Events.AntiTiktok:
+                    ItsComing("Anti Tiktok (15s)");
+                    StartCoroutine(AntiTiktok(15f));
                     break;
             }
         }
@@ -638,6 +652,28 @@ namespace ChaosMod
             DeadBatteriesPatch.Disabled = false;
             UI.Remove("currentEvent");
         }
+        private IEnumerator CameraDoABarrelRoll(float seconds)
+        {
+            Camera cam = Locator.GetPlayerCamera().mainCamera;
+            float angle = 0f;
+            // dear unity engineers pls make this easier
+            Camera.CameraCallback roll = rendering => { if (rendering == cam) rendering.transform.Rotate(0f, 0f, angle, Space.Self); };
+            Camera.CameraCallback unroll = rendering => { if (rendering == cam) rendering.transform.Rotate(0f, 0f, -angle, Space.Self); };
+
+            Camera.onPreCull += roll;
+            Camera.onPostRender += unroll;
+
+            float elapsed = 0f;
+            while (elapsed < seconds)
+            {
+                angle = 360f * Mathf.SmoothStep(0f, 1f, elapsed / seconds);
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            Camera.onPreCull -= roll;
+            Camera.onPostRender -= unroll;
+        }
         private void Turn180()
         {
             OWRigidbody body = Locator.GetPlayerBody();
@@ -646,12 +682,27 @@ namespace ChaosMod
             Quaternion turned = body.transform.rotation * Quaternion.AngleAxis(180f, Vector3.up);
             body.WarpToPositionRotation(body.GetPosition(), turned);
         }
+        private IEnumerator AntiTiktok(float seconds)
+        {
+            UIPanel strip = UI.Panel("phone", 608f, 1080f, Anchor.Center);
+            strip.Background = Color.black;
+            strip.BorderWidth = 0f;
+
+            UILabel text = UI.Label("phoneTxt", "Anti tiktok mode", Anchor.Center, 0, 0);
+            text.Size = new Vector2(608f, 40f);
+            text.FontSize = 28;
+            text.Alignment = TextAnchor.MiddleCenter;
+
+            yield return new WaitForSecondsRealtime(seconds);
+            UI.Remove("phone");
+            UI.Remove("phoneTxt");
+        }
 
         public void Start()
         {
             var os = SystemInfo.operatingSystemFamily;
             // Starting here, you'll have access to OWML's mod helper.
-            ModHelper.Console.WriteLine($"My mod {nameof(ChaosMod)} is loaded!", MessageType.Success);
+            ModHelper.Console.WriteLine($"ChaosMod is now loaded! {System.Enum.GetValues(typeof(Events)).Length} events loaded", MessageType.Success);
             if (os != OperatingSystemFamily.Windows)
             {
                 UI.Popup("nonWindowsWarning", "WARNING! DO NOT IGNORE THIS\nYou are not using Windows, which this mod heavily relies on. You may encounter issues or some events skipping", "I understand, continue", 5f);
@@ -665,6 +716,15 @@ namespace ChaosMod
 
             new Harmony("Stacik.ChaosMod").PatchAll(Assembly.GetExecutingAssembly());
             LoadManager.OnCompleteSceneLoad += OnCompleteSceneLoad;
+
+            GlobalMessenger<EyeState>.AddListener("EyeStateChanged", OnEyeStateChanged);
+        }
+        private void OnEyeStateChanged(EyeState state)
+        {
+            if (Locator.GetEyeStateManager().IsInsideTheEye())
+            {
+                UI.Popup("noticeOfTermination", "You have now entered an area in the Eye that will (mostly) be uncompatible with ChaosMod. Some events have been disabled");
+            }
         }
 
         private bool InMultiplayer()
@@ -771,6 +831,8 @@ namespace ChaosMod
         TwoTimesHealth,
         DeadBatteries,
         ControlsStuck,
+        CameraDoABarrelRoll,
+        AntiTiktok,
     }
 
     [HarmonyPatch(typeof(SandLevelController), "FixedUpdate")]
@@ -797,7 +859,10 @@ namespace ChaosMod
 
         public static bool Prefix()
         {
-            return !Disabled;
+            if (!Disabled) return true;
+
+            AudioSource.PlayClipAtPoint(ChaosMod.Instance.ModHelper.Assets.GetAudio("assets/no.mp3"), Locator.GetPlayerCamera().transform.position, 1f); // holy long line
+            return false;
         }
     }
 

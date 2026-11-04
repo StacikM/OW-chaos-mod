@@ -37,6 +37,8 @@ Inspired by GTA 5 mod Chaos Mod
 - 2x health (you get 200 hp)
 - Dead Batteries
 - Controls Stuck
+- Camera, do a barrel roll!
+- Anti Tiktok
 
 ## FAQ
 ### How do I disable a event thats not in settings
