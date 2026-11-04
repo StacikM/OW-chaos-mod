@@ -3,6 +3,7 @@
   "enabled": true,
   "settings": {
     "Allow QSB": false,
+    "Debug": false,
     "Effect Interval": {
       "type": "number",
       "value": 30,

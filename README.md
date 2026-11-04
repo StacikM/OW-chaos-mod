@@ -35,6 +35,8 @@ Inspired by GTA 5 mod Chaos Mod
 - Proxy Planets (15s) (will not work when supernova is active)
 - 180° head snap
 - 2x health (you get 200 hp)
+- Dead Batteries
+- Controls Stuck
 
 ## FAQ
 ### How do I disable a event thats not in settings
