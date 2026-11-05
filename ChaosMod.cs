@@ -150,6 +150,10 @@ namespace ChaosMod
                     StartCoroutine(BigGuy());
                     break;
 
+                case Events.TinyGuy:
+                    StartCoroutine(TinyGuy());
+                    break;
+
                 case Events.RemoveSpacesuit:
                     if (Locator.GetEyeStateManager().IsInsideTheEye()) { DecideWhichEvent(); break; } // Before the observatory is ok, since they will die a horrible death and come back to the vessel, but after the observatory you can't die and you can't complete the game without spacesuit
                     ItsComing("Remove Spacesuit");
@@ -498,6 +502,14 @@ namespace ChaosMod
             yield return new WaitForSeconds(20);
             body.SetLocalScale(body.GetLocalScale() * 0.5f); // this will break if the player dies inbetween but well uh... chaos mod is the name of the mod so its ok
         }
+        IEnumerator TinyGuy()
+        {
+            ItsComing("Tiny Guy (20s)");
+            OWRigidbody body = Locator.GetPlayerBody();
+            body.SetLocalScale(body.GetLocalScale() * 0.5f);
+            yield return new WaitForSeconds(20);
+            body.SetLocalScale(body.GetLocalScale() * 2f); // this will break if the player dies inbetween but well uh... chaos mod is the name of the mod so its ok
+        }
         public void BlowUpShip()
         {
             ItsComing("Blow Up Ship");
@@ -833,6 +845,7 @@ namespace ChaosMod
         FastForwardThirtySec,
         FakeCrash,
         BigGuy,
+        TinyGuy,
         RemoveSpacesuit,
         BlowUpShip,
         FlipScreen,
