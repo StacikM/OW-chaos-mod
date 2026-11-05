@@ -39,6 +39,7 @@ Inspired by GTA 5 mod Chaos Mod
 - Controls Stuck
 - Camera, do a barrel roll!
 - Anti Tiktok
+- Third Person
 
 ## FAQ
 ### How do I disable a event thats not in settings
@@ -49,6 +50,10 @@ I only put events that made me officially rage while testing
 Partially, the mod can resize your game, show alerts and move the game window around. It will never touch anything outside of Outer Wilds
 ### Why are some effects not announced?? Fix your mod!!!!!
 Troll effects aren't announced or else they wouldn't be trolls
+### I use arch, by the way
+Some events will be disabled
+### Can my 2 viewer audience vote?
+Not yet, im too lazy lmao (but it will come in a future update)
 
 ## Credits
 [Stacik](https://github.com/StacikM) - Creator and owner of the mod

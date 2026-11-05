@@ -277,12 +277,18 @@ namespace ChaosMod
                     break;
 
                 case Events.CameraDoABarrelRoll:
+                    ItsComing("Camera, do a barrel roll!");
                     StartCoroutine(CameraDoABarrelRoll(1.2f));
                     break;
 
                 case Events.AntiTiktok:
                     ItsComing("Anti Tiktok (15s)");
                     StartCoroutine(AntiTiktok(15f));
+                    break;
+
+                case Events.ThirdPerson:
+                    ItsComing("Third Person (20s)");
+                    StartCoroutine(ThirdPerson(20f, 3f));
                     break;
             }
         }
@@ -697,6 +703,25 @@ namespace ChaosMod
             UI.Remove("phone");
             UI.Remove("phoneTxt");
         }
+        private IEnumerator ThirdPerson(float seconds, float distance)
+        {
+            Camera cam = Locator.GetPlayerCamera().mainCamera;
+            int visibleLayer = 1 << LayerMask.NameToLayer("VisibleToProbe");
+            int originalMask = cam.cullingMask;
+            cam.cullingMask |= visibleLayer;
+
+            Camera.CameraCallback pull = rendering => { if (rendering == cam) rendering.transform.position -= rendering.transform.forward * distance; }; // chaos code
+            Camera.CameraCallback restore = rendering => { if (rendering == cam) rendering.transform.position += rendering.transform.forward * distance; };
+
+            Camera.onPreCull += pull;
+            Camera.onPostRender += restore;
+
+            yield return new WaitForSecondsRealtime(seconds);
+
+            Camera.onPreCull -= pull;
+            Camera.onPostRender -= restore;
+            cam.cullingMask = originalMask;
+        }
 
         public void Start()
         {
@@ -705,7 +730,7 @@ namespace ChaosMod
             ModHelper.Console.WriteLine($"ChaosMod is now loaded! {System.Enum.GetValues(typeof(Events)).Length} events loaded", MessageType.Success);
             if (os != OperatingSystemFamily.Windows)
             {
-                UI.Popup("nonWindowsWarning", "WARNING! DO NOT IGNORE THIS\nYou are not using Windows, which this mod heavily relies on. You may encounter issues or some events skipping", "I understand, continue", 5f);
+                UI.Popup("nonWindowsWarning", "WARNING!\nYou are not using Windows, which this mod heavily relies on. You may encounter issues or some events skipping", "I understand, continue", 5f);
             }
             UIBar bar = UI.Bar("timer", 1f, Anchor.TopCenter, 0, 0);
             theBarButGlobalHaha = bar;
@@ -833,6 +858,7 @@ namespace ChaosMod
         ControlsStuck,
         CameraDoABarrelRoll,
         AntiTiktok,
+        ThirdPerson,
     }
 
     [HarmonyPatch(typeof(SandLevelController), "FixedUpdate")]
