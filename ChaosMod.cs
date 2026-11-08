@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using Newtonsoft.Json.Serialization;
 using OWML.Common;
 using OWML.ModHelper;
 using System;
@@ -10,9 +11,9 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem;
-using Newtonsoft.Json.Serialization;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace ChaosMod
 {
@@ -294,6 +295,26 @@ namespace ChaosMod
                     ItsComing("Third Person (20s)");
                     StartCoroutine(ThirdPerson(20f, 3f));
                     break;
+
+                case Events.ScoutCamera:
+                    ItsComing("Scout Camera (30s)");
+                    StartCoroutine(ScoutCameraEvent(30f));
+                    break;
+
+                case Events.NomaiGibberish:
+                    ItsComing("Nomai Gibberish (30s)");
+                    StartCoroutine(NomaiGibberish(30f));
+                    break;
+
+                case Events.ScrambledHUDs:
+                    ItsComing("Scrambled HUDs (15s)");
+                    StartCoroutine(ScrambledHUDs(15f, 150f));
+                    break;
+
+                case Events.NoBrakes:
+                    ItsComing("No Brakes (15s)");
+                    StartCoroutine(NoBrakes(15f));
+                    break;
             }
         }
 
@@ -511,10 +532,9 @@ namespace ChaosMod
             body.SetLocalScale(body.GetLocalScale() * 2f); // this will break if the player dies inbetween but well uh... chaos mod is the name of the mod so its ok
         }
         public void BlowUpShip()
-        {
-            ItsComing("Blow Up Ship");
-
+        { 
             if (!isBlowupyes) { DecideWhichEvent(); return; }
+            ItsComing("Blow Up Ship");
 
             var shipBody = Locator.GetShipBody();
             if (shipBody == null) return;
@@ -700,6 +720,54 @@ namespace ChaosMod
             Quaternion turned = body.transform.rotation * Quaternion.AngleAxis(180f, Vector3.up);
             body.WarpToPositionRotation(body.GetPosition(), turned);
         }
+        private IEnumerator ScoutCameraEvent(float seconds) //kill meeeee this took so long
+        {
+            ProbeLauncher launcher = Locator.GetToolModeSwapper().GetProbeLauncher();
+            if (launcher == null) yield break;
+
+            OWCamera playerCam = Locator.GetPlayerCamera();
+            AudioListener playerEars = playerCam.GetComponent<AudioListener>();
+            SurveyorProbe flying = null;
+            OWCamera scoutCam = null;
+            AudioListener scoutEars = null;
+
+            void Show(OWCamera camera)
+            {
+                playerCam.enabled = camera == playerCam;
+                if (playerEars != null) playerEars.enabled = camera == playerCam;
+                if (scoutCam != null) scoutCam.enabled = camera == scoutCam;
+                if (scoutEars != null) scoutEars.enabled = camera == scoutCam;
+                GlobalMessenger<OWCamera>.FireEvent("SwitchActiveCamera", camera);
+            }
+
+            ProbeLauncher.LaunchProbeEvent hook = probe => flying = probe;
+            launcher.OnLaunchProbe += hook;
+
+            float endsAt = Time.unscaledTime + seconds;
+            while (Time.unscaledTime < endsAt)
+            {
+                if (flying != null && scoutCam == null)
+                {
+                    scoutCam = flying.GetForwardCamera().GetOWCamera();
+                    scoutEars = scoutCam.GetComponent<AudioListener>() ?? scoutCam.gameObject.AddComponent<AudioListener>();
+                    scoutCam.targetTexture = null;
+                    Show(scoutCam);
+                }
+                else if (scoutCam != null && (flying == null || flying.IsRetrieved()))
+                {
+                    Show(playerCam);
+                    scoutCam = null;
+                    scoutEars = null;
+                    flying = null;
+                }
+
+                yield return null;
+            }
+
+            launcher.OnLaunchProbe -= hook;
+            if (scoutCam != null) Show(playerCam);
+        }
+
         private IEnumerator AntiTiktok(float seconds)
         {
             UIPanel strip = UI.Panel("phone", 608f, 1080f, Anchor.Center);
@@ -733,6 +801,43 @@ namespace ChaosMod
             Camera.onPreCull -= pull;
             Camera.onPostRender -= restore;
             cam.cullingMask = originalMask;
+        }
+        IEnumerator NomaiGibberish(float seconds)
+        {
+            GibberishPatch.Enabled = true;
+            yield return new WaitForSeconds(seconds);
+            GibberishPatch.Enabled = false;
+        }
+        IEnumerator ScrambledHUDs(float seconds, float spread)
+        {
+            Dictionary<RectTransform, Vector2> original = new Dictionary<RectTransform, Vector2>();
+
+            foreach (Canvas canvas in FindObjectsOfType<Canvas>())
+            {
+                if (canvas.renderMode == RenderMode.WorldSpace) continue;
+
+                foreach (Graphic graphic in canvas.GetComponentsInChildren<Graphic>())
+                {
+                    RectTransform rect = graphic.rectTransform;
+                    if (original.ContainsKey(rect)) continue;
+
+                    original[rect] = rect.anchoredPosition;
+                    rect.anchoredPosition += new Vector2(UnityEngine.Random.Range(-spread, spread), UnityEngine.Random.Range(-spread, spread));
+                }
+            }
+
+            yield return new WaitForSecondsRealtime(seconds);
+
+            foreach (KeyValuePair<RectTransform, Vector2> saved in original) //holy mess
+            {
+                if (saved.Key != null) saved.Key.anchoredPosition = saved.Value;
+            }
+        }
+        IEnumerator NoBrakes(float seconds)
+        {
+            NoShipBrakePatch.Disabled = true;
+            yield return new WaitForSeconds(seconds);
+            NoShipBrakePatch.Disabled = false;
         }
 
         public void Start()
@@ -872,6 +977,10 @@ namespace ChaosMod
         CameraDoABarrelRoll,
         AntiTiktok,
         ThirdPerson,
+        ScoutCamera,
+        NomaiGibberish,
+        ScrambledHUDs,
+        NoBrakes,
     }
 
     [HarmonyPatch(typeof(SandLevelController), "FixedUpdate")]
@@ -922,6 +1031,38 @@ namespace ChaosMod
             if (!TimeLoop.IsTimeLoopEnabled() && LoadManager.GetCurrentScene() != OWScene.EyeOfTheUniverse) // i think its so cool that in the ending of outer wilds when the universe goes kaboom on you it actually kills the player
             {
                 ChaosMod.Instance.OnDiedBeforeLoop();
+            }
+        }
+    }
+    [HarmonyPatch(typeof(NomaiText), nameof(NomaiText.GetTextNode), new Type[] { typeof(int) })]
+    public static class GibberishPatch
+    {
+        public static bool Enabled;
+
+        public static void Postfix(ref string __result)
+        {
+            if (!Enabled || string.IsNullOrEmpty(__result)) return;
+
+            System.Random seeded = new System.Random(__result.GetHashCode());
+            StringBuilder scrambled = new StringBuilder(__result.Length);
+            foreach (char letter in __result)
+            {
+                scrambled.Append(char.IsLetter(letter) ? (char)('a' + seeded.Next(26)) : letter);
+            }
+
+            __result = scrambled.ToString();
+        }
+    }
+    [HarmonyPatch(typeof(OWInput), nameof(OWInput.GetValue), new System.Type[] { typeof(IInputCommands), typeof(InputMode) })]
+    public static class NoShipBrakePatch
+    {
+        public static bool Disabled;
+
+        public static void Postfix(IInputCommands command, ref float __result)
+        {
+            if (Disabled && __result < 0f && command == InputLibrary.thrustZ && PlayerState.AtFlightConsole())
+            {
+                __result = 0f;
             }
         }
     }

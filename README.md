@@ -40,6 +40,10 @@ Inspired by GTA 5 mod Chaos Mod
 - Camera, do a barrel roll!
 - Anti Tiktok
 - Third Person
+- Tiny guy
+- Nomai Gibberish
+- Scrambled HUDs
+- No Brakes
 
 ## FAQ
 ### How do I disable a event thats not in settings
@@ -54,6 +58,8 @@ Troll effects aren't announced or else they wouldn't be trolls
 Some events will be disabled
 ### Can my 2 viewer audience vote?
 Not yet, im too lazy lmao (but it will come in a future update)
+### Is ChaosMod active during the end of the game
+Its mostly disabled
 
 ## Credits
 [Stacik](https://github.com/StacikM) - Creator and owner of the mod
