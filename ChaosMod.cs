@@ -14,6 +14,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using Steamworks;
 
 namespace ChaosMod
 {
@@ -314,6 +315,13 @@ namespace ChaosMod
                 case Events.NoBrakes:
                     ItsComing("No Brakes (15s)");
                     StartCoroutine(NoBrakes(15f));
+                    break;
+
+                case Events.Screenshot:
+                    if (!SteamManager.Initialized) { /* who even plays on epic */ DecideWhichEvent(); return; }
+                    if (Environment.GetEnvironmentVariable("SteamAppId") == "480") { UI.Notify("An event failed to load because you are using QSB, if you want to enjoy the mod fully, disable QSB"); DecideWhichEvent(); return; } // screw you qsb
+                    ItsComing("Screenshot");
+                    SteamScreenshots.TriggerScreenshot();
                     break;
             }
         }
@@ -981,6 +989,7 @@ namespace ChaosMod
         NomaiGibberish,
         ScrambledHUDs,
         NoBrakes,
+        Screenshot, // this shit has a 1/1000 chance of actually working, why? i dont know
     }
 
     [HarmonyPatch(typeof(SandLevelController), "FixedUpdate")]

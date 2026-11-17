@@ -44,6 +44,7 @@ Inspired by GTA 5 mod Chaos Mod
 - Nomai Gibberish
 - Scrambled HUDs
 - No Brakes
+- Screenshot (kinda broken)
 
 ## FAQ
 ### How do I disable a event thats not in settings
